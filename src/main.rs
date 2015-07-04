@@ -14,9 +14,30 @@ struct Population {
 	row: u16
 }
 
+#[derive(Debug)]
+struct Deme {
+	parents: LinkedList<DemeEntry>,
+	offspring: LinkedList<DemeEntry>,
+}
+
+#[derive(Debug)]
+struct DemeEntry {
+	id: u16,
+	ru: i8
+}
+
 const CARRY_SIZE:usize = 5;
 const MIN_RU:i8 = 0;
 const MAX_RU:i8 = 20;
+
+//Copied from http://www.piston.rs/image/src/image/math/utils.rs.html#13-18 
+#[inline]
+pub fn clamp<N>(a: N, min: N, max: N) -> N
+where N: PartialOrd {
+    if a < min { return min }
+    if a > max { return max }
+    a
+}
 
 impl Population {
 	pub fn new(row:u16, col:u16) -> Population {
@@ -83,27 +104,6 @@ impl Population {
 			deme.cut_carry();
 		}
 	}
-}
-
-#[derive(Debug)]
-struct Deme {
-	parents: LinkedList<DemeEntry>,
-	offspring: LinkedList<DemeEntry>,
-}
-
-#[derive(Debug)]
-struct DemeEntry {
-	id: u16,
-	ru: i8
-}
-
-//Copied from http://www.piston.rs/image/src/image/math/utils.rs.html#13-18 
-#[inline]
-pub fn clamp<N>(a: N, min: N, max: N) -> N
-where N: PartialOrd {
-    if a < min { return min }
-    if a > max { return max }
-    a
 }
 
 impl Deme {

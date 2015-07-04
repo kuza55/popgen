@@ -97,23 +97,13 @@ struct DemeEntry {
 	ru: i8
 }
 
-fn clamp (min:f64, max:f64, val:f64) -> f64 {
-	if val < min {
-		min
-	} else if val > max {
-		max
-	} else {
-		val
-	}
-}
-fn clamp_i8 (min:i8, max:i8, val:i8) -> i8 {
-	if val < min {
-		min
-	} else if val > max {
-		max
-	} else {
-		val
-	}
+//Copied from http://www.piston.rs/image/src/image/math/utils.rs.html#13-18 
+#[inline]
+pub fn clamp<N>(a: N, min: N, max: N) -> N
+where N: PartialOrd {
+    if a < min { return min }
+    if a > max { return max }
+    a
 }
 
 impl Deme {
@@ -131,7 +121,7 @@ impl Deme {
 		let normal = Normal::new((MAX_RU-MIN_RU) as f64/2 as f64, (MAX_RU-MIN_RU) as f64/7 as f64);
 		
 		for _ in 1..CARRY_SIZE {
-			let ru = clamp(MIN_RU as f64, MAX_RU as f64, normal.ind_sample(&mut rand::thread_rng()));
+			let ru = clamp(normal.ind_sample(&mut rand::thread_rng()), MIN_RU as f64, MAX_RU as f64);
 			gen.push_back(DemeEntry{id: 0, ru: ru as i8})
 		}
 		
@@ -153,7 +143,7 @@ impl Deme {
 					_ => 0
 				};
 				//println!("ru: {}, adjust: {}", entry.ru, adjust);
-				let new_ru = clamp_i8(MIN_RU, MAX_RU, entry.ru + adjust);
+				let new_ru = clamp(entry.ru + adjust, MIN_RU, MAX_RU);
 				
 				new_gen.push_back(DemeEntry { id:0, ru: new_ru })
 			}

@@ -1,0 +1,15 @@
+[package]
+
+name = "popgen"
+version = "0.0.1"
+authors = [ "Alex Kouzemtchenko <kuza55@gmail.com>" ]
+
+[[bin]]
+
+name = "popgen"
+
+[dependencies]
+rand = "0.3.8"
+
+[dependencies.linked-list]
+git = "https://github.com/contain-rs/linked-list"

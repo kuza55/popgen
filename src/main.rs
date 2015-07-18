@@ -1,3 +1,4 @@
+extern crate time;
 extern crate rand;
 use rand::thread_rng;
 use rand::distributions::{Normal, IndependentSample, Range};
@@ -22,13 +23,13 @@ struct Deme {
 
 #[derive(Debug)]
 struct DemeEntry {
-	id: u16,
+	id: u32,
 	ru: i8
 }
 
-const CARRY_SIZE:usize = 5;
-const MIN_RU:i8 = 0;
-const MAX_RU:i8 = 20;
+const CARRY_SIZE:usize = 100;
+const MIN_RU:i8 = 1;
+const MAX_RU:i8 = 19;
 
 //Copied from http://www.piston.rs/image/src/image/math/utils.rs.html#13-18 
 #[inline]
@@ -62,8 +63,10 @@ impl Population {
 	}
 	
 	fn migrate_offspring(&mut self) {
-		let pct_range = Range::new(0, 400);
+		let pct_range = Range::new(0,400);
 		
+		//All elements in given linked list should be migrated to the cell
+		//indicated by the key
 		let mut mig_map2:HashMap<(u16,u16),LinkedList<DemeEntry>> = HashMap::new();
 		
 		let col_max = self.col;
@@ -78,10 +81,18 @@ impl Population {
 				
 				while !cur.peek_next().is_none() {
 					match pct_range.ind_sample(&mut rand::thread_rng()) {
-						1 => if col > 0 { mig_map2.entry((row, col-1)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap()) },
-						2 => if row > 0 { mig_map2.entry((row-1,col)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap()) },
-						3 => if col < col_max-1 { mig_map2.entry((row,col+1)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap()) },
-						4 => if row < row_max-1 { mig_map2.entry((row+1,col)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap()) },
+						1 => if col > 0 {
+								mig_map2.entry((row, col-1)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap())
+							},
+						2 => if row > 0 {
+								mig_map2.entry((row-1,col)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap())
+							},
+						3 => if col < col_max-1 {
+								mig_map2.entry((row,col+1)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap())
+							},
+						4 => if row < row_max-1 {
+								mig_map2.entry((row+1,col)).or_insert(LinkedList::new()).push_front(cur.remove().unwrap())
+							},
 						_ => cur.seek_forward(1),
 					}
 				}
@@ -89,20 +100,59 @@ impl Population {
 		}
 				
 		for ((row, col), mut deme_list) in mig_map2.into_iter() {
-			self.get(row, col).offspring.append(&mut deme_list);
+			let mut deme = self.get(row, col);
+			let mut offspring_cur = deme.offspring.cursor();
+			let mut new_cur = deme_list.cursor();
+			
+			//XXX: TODO make this more efficient
+			while !new_cur.peek_next().is_none() {
+				let deme_entry_id:u32 = new_cur.peek_next().unwrap().id;
+				
+				let mut insert = false;
+				
+				while !insert {
+					
+					{
+						let curr = offspring_cur.next();
+					
+						match curr {
+							None => {
+									insert = true
+								},
+							Some(existing) =>
+								if deme_entry_id < existing.id {
+									insert = true;
+								},
+						}
+					}
+					
+					if insert {
+						offspring_cur.insert(new_cur.remove().unwrap());
+					}
+				}
+			}
+			
 		}
 	}
 	
 	pub fn next_gen(&mut self) {
+		//println!("Starting next_gen");
+		
 		for deme in self.cells.iter_mut() {
 			deme.procreate();
 		}
 		
+		//println!("Done procreating");
+		
 		self.migrate_offspring();
+		
+		//println!("Migrating offspring");
 		
 		for deme in self.cells.iter_mut() {
 			deme.cut_carry();
 		}
+		
+		//println!("Cut carry");
 	}
 }
 
@@ -117,26 +167,40 @@ impl Deme {
 	pub fn make_gen() -> LinkedList<DemeEntry> {
 		let mut gen: LinkedList<DemeEntry> = LinkedList::new();
 		
+		// 
+		let id_range = Range::new(0, std::u32::MAX);
+		let mut ids: Vec<u32> = vec![];
+		
+		for _ in 1..CARRY_SIZE {
+			ids.push(id_range.ind_sample(&mut rand::thread_rng()))
+		}
+		ids.sort();
+		
+		let mut idx_iter = ids.iter();
+		
 		// mean 2, standard deviation 3
 		let normal = Normal::new((MAX_RU-MIN_RU) as f64/2 as f64, (MAX_RU-MIN_RU) as f64/7 as f64);
 		
 		for _ in 1..CARRY_SIZE {
+			let id = idx_iter.next().unwrap().clone();
 			let ru = clamp(normal.ind_sample(&mut rand::thread_rng()), MIN_RU as f64, MAX_RU as f64);
-			gen.push_back(DemeEntry{id: 0, ru: ru as i8})
+			gen.push_back(DemeEntry{id: id, ru: ru as i8})
 		}
 		
 		gen
 	}
 	
 	pub fn procreate(&mut self) {
-		let mut new_gen: LinkedList<DemeEntry> = LinkedList::new();
+		let mut new_gen: Vec<DemeEntry> = vec![];
 		
-		let pct_range = Range::new(0, 100);
+		let pct_range = Range::new(0, 200);
+		
+		let id_range = Range::new(0, std::u32::MAX);
 		
 		for entry in self.parents.iter_mut() {
 			
 			for _ in 0..2 {
-				let pct:i8 = pct_range.ind_sample(&mut rand::thread_rng());
+				let pct:i16 = pct_range.ind_sample(&mut rand::thread_rng());
 				let adjust = match pct {
 					1 => 1,
 					2 => -1,
@@ -145,11 +209,21 @@ impl Deme {
 				//println!("ru: {}, adjust: {}", entry.ru, adjust);
 				let new_ru = clamp(entry.ru + adjust, MIN_RU, MAX_RU);
 				
-				new_gen.push_back(DemeEntry { id:0, ru: new_ru })
+				let new_id = id_range.ind_sample(&mut rand::thread_rng());
+				
+				new_gen.push(DemeEntry { id:new_id, ru: new_ru })
 			}
 		}
 		
-		self.offspring = new_gen
+		new_gen.sort_by(|a, b| {a.id.cmp(&b.id)});
+		
+		let mut new_gen_list = LinkedList::new();
+		
+		for entry in new_gen.into_iter() {
+			new_gen_list.push_back(entry)
+		}
+		
+		self.offspring = new_gen_list
 	}
 	
 	fn cut_carry(&mut self) {
@@ -159,12 +233,15 @@ impl Deme {
 }
 
 fn main() {
-	let mut pop = Population::new(2, 1);
+	
+	let start_sec = time::get_time().sec;
+	
+	let mut pop = Population::new(25, 15);
     
-    pop.next_gen();
-    pop.next_gen();
-    pop.next_gen();
+    for _ in 1..100 {
+	    pop.next_gen();
+	    //println!("pop: {:#?}", pop);
+    }
     
-    
-    println!("pop: {:?}", pop);
+    println!("Completed in {} seconds", (time::get_time().sec - start_sec));
 }
